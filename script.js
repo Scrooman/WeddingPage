@@ -242,7 +242,7 @@ for (const file of sorted) {
     }
 
     // Dodaj rekord do print_queue
-    await client.from("print_queue").insert({
+    await supabase.from("print_queue").insert({
         image_url: urlData.publicUrl,
         status: "pending"
     });
