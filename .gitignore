@@ -1,0 +1,11 @@
+# plik app.js
+app.js
+
+# plik environmental variables
+.env
+
+# plik konfiguracyjny dla npm
+package.json
+
+# node_modules
+node_modules

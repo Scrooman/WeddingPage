@@ -137,6 +137,22 @@ uploadBtn.addEventListener("click", async () => {
   loadGallery();
 });
 
+
+//  ----------------------
+// LOGIKA DRUKOWANIA
+// ----------------------
+
+async function checkPrinterAvailability() {
+  try {
+    const res = await fetch("http://localhost:3000/status");
+    const data = await res.json();
+    return data.online === true;
+  } catch (err) {
+    console.warn("Backend drukarki niedostępny");
+    return false;
+  }
+}
+
 // ----------------------
 // ŁADOWANIE GALERII
 // ----------------------
@@ -182,8 +198,9 @@ for (const file of sorted) {
 
     
 
-  const printBtn = document.createElement("button");
-  printBtn.textContent = "Drukuj"; // na razie nieaktywny
+    const printBtn = document.createElement("button");
+    printBtn.textContent = "Drukuj";
+    printBtn.disabled = true; // domyślnie wyłączony    
 
   controls1a.appendChild(checkbox);
   controls.appendChild(controls1a);
@@ -194,6 +211,37 @@ for (const file of sorted) {
     label.textContent = "Zaznacz, aby pobrać";
     controls1a.appendChild(label);
     controls.appendChild(printBtn);
+
+    checkPrinterAvailability().then((available) => {
+        if (available) {
+            printBtn.disabled = false;
+            printBtn.style.cursor = "pointer";
+            printBtn.style.background = "#222";
+            printBtn.style.color = "#fff";
+        } else {
+            printBtn.disabled = true;
+            printBtn.style.cursor = "not-allowed";
+            printBtn.style.background = "#ccc";
+            printBtn.style.color = "#666";
+        }
+    });
+
+    printBtn.addEventListener("click", async () => {
+    const available = await checkPrinterAvailability();
+
+    if (!available) {
+        console.warn("Drukowanie niedostępne — backend offline");
+        return;
+    }
+
+    // Dodaj rekord do print_queue
+    await supabase.from("print_queue").insert({
+        image_url: urlData.publicUrl,
+        status: "pending"
+    });
+
+    console.log("Zadanie drukowania wysłane");
+    });
 
 
 
@@ -224,5 +272,8 @@ for (const file of sorted) {
     speed: 300
   });
 }
+
+
+
 
 loadGallery();
