@@ -2,6 +2,11 @@
 const SUPABASE_URL = "https://vuhnrmnwkjlxcrysmvkx.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ1aG5ybW53a2pseGNyeXNtdmt4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYxOTg1OTgsImV4cCI6MjEwMTc3NDU5OH0.ZDO7tNWNRVimRzXsn-_lZvkr0y7aUy88KlR57rgAkts";
 
+// KONFIGURACJA BACKENDU
+const BACKEND_URL = "https://eba3-194-9-78-248.ngrok-free.app";
+
+
+
 // FUNKCJA SANITYZUJĄCA NAZWY PLIKÓW
 function sanitizeFileName(name) {
   return name
@@ -144,7 +149,7 @@ uploadBtn.addEventListener("click", async () => {
 
 async function checkPrinterAvailability() {
   try {
-    const res = await fetch("http://localhost:3000/status");
+    const res = await fetch(`${BACKEND_URL}/status`);
     const data = await res.json();
     return data.online === true;
   } catch (err) {
