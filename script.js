@@ -17,6 +17,8 @@ function sanitizeFileName(name) {
 
 console.log("Supabase URL:", SUPABASE_URL);
 
+console.log("Backend URL:", BACKEND_URL);
+
 const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let galleryInstance = null;
