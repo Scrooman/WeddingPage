@@ -21,6 +21,7 @@ const fileInput = document.getElementById("fileInput");
 const fileInputLabel = document.getElementById("fileInputLabel");
 const uploadBtn = document.getElementById("uploadBtn");
 const selectedCount = document.getElementById("selectedCount");
+const downloadSelectedBtn = document.getElementById("downloadSelectedBtn");
 
 // ----------------------
 // OBSŁUGA WYBORU PLIKÓW
@@ -44,6 +45,52 @@ fileInput.addEventListener("change", () => {
     selectedCount.textContent = "";
   }
 });
+
+// Logika pływającego przycisku pobierania
+
+
+function updateDownloadButton() {
+  const checked = document.querySelectorAll('.photo-controls input[type="checkbox"]:checked');
+  downloadSelectedBtn.style.display = checked.length > 0 ? "block" : "none";
+}
+
+// Logika Pobierania wybranych zdjęć
+
+downloadSelectedBtn.addEventListener("click", async () => {
+  const checked = document.querySelectorAll('.photo-controls input[type="checkbox"]:checked');
+
+  for (const cb of checked) {
+    const url = cb.dataset.url;
+
+    // Pobieramy plik jako blob
+    const response = await fetch(url);
+    const blob = await response.blob();
+
+    // Tworzymy lokalny URL do pobrania
+    const blobUrl = URL.createObjectURL(blob);
+
+    // Tworzymy element <a> z atrybutem download
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = url.split("/").pop(); // nazwa pliku
+    document.body.appendChild(a);
+
+    // Wywołujemy pobranie
+    a.click();
+
+    // Sprzątanie
+    a.remove();
+    URL.revokeObjectURL(blobUrl);
+  }
+
+  // Reset checkboxów
+  checked.forEach(cb => cb.checked = false);
+
+  // Ukrycie przycisku
+  downloadSelectedBtn.style.display = "none";
+});
+
+
 
 // ----------------------
 // UPLOAD ZDJĘĆ
@@ -83,6 +130,9 @@ uploadBtn.addEventListener("click", async () => {
     uploadBtn.style.display = "none";
     selectedCount.textContent = "";
 
+    document.querySelectorAll('.photo-controls input[type="checkbox"]').forEach(cb => cb.checked = false);
+    downloadSelectedBtn.style.display = "none";
+
   // Odśwież galerię
   loadGallery();
 });
@@ -109,22 +159,60 @@ async function loadGallery() {
 
   gallery.innerHTML = "";
 
-  for (const file of sorted) {
-    const { data: urlData } = client.storage
-      .from("Photos")
-      .getPublicUrl(file.name);
+for (const file of sorted) {
+  const { data: urlData } = client.storage
+    .from("Photos")
+    .getPublicUrl(file.name);
 
-    const link = document.createElement("a");
-    link.href = urlData.publicUrl;
-    link.className = "gallery-item";
+  const frame = document.createElement("div");
+  frame.className = "photo-frame";
 
-    const img = document.createElement("img");
-    img.src = urlData.publicUrl;
-    img.loading = "lazy";
+  const controls = document.createElement("div");
+  controls.className = "photo-controls";
 
-    link.appendChild(img);
-    gallery.appendChild(link);
-  }
+  const controls1a = document.createElement("div");
+  controls1a.className = "photo-controls-1a";
+
+  const checkbox = document.createElement("input");
+  checkbox.type = "checkbox";
+  checkbox.dataset.url = urlData.publicUrl;
+
+  checkbox.addEventListener("change", updateDownloadButton);
+
+
+    
+
+  const printBtn = document.createElement("button");
+  printBtn.textContent = "Drukuj"; // na razie nieaktywny
+
+  controls1a.appendChild(checkbox);
+  controls.appendChild(controls1a);
+
+    // dodaj etykietę dla checkboxa
+    const label = document.createElement("label");
+    label.className = "photo-controls-1a .label";
+    label.textContent = "Zaznacz, aby pobrać";
+    controls1a.appendChild(label);
+    controls.appendChild(printBtn);
+
+
+
+  const link = document.createElement("a");
+  link.href = urlData.publicUrl;
+  link.className = "gallery-item";
+
+  const img = document.createElement("img");
+  img.src = urlData.publicUrl;
+  img.loading = "lazy";
+
+  link.appendChild(img);
+
+  frame.appendChild(controls);
+  frame.appendChild(link);
+
+  gallery.appendChild(frame);
+}
+
 
   if (galleryInstance) {
     galleryInstance.destroy(true);

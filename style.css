@@ -88,3 +88,74 @@ h1 {
     grid-template-columns: repeat(1, 1fr);
   }
 }
+
+/* Ramka zdjęcia */
+.photo-frame {
+  border: 2px solid #ddd;
+  border-radius: 10px;
+  padding: 10px;
+  background: #fff;
+  position: relative;
+  transition: transform 0.15s ease;
+}
+
+.photo-frame:active {
+  transform: scale(1.02);
+}
+
+/* Górny pasek z checkboxem i przyciskiem Drukuj */
+.photo-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.photo-controls-1a {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.photo-controls-1a label {
+    margin-left: 0.8rem;
+    font-size: 0.8rem;
+    font-style: italic;
+}
+
+.photo-controls button {
+  padding: 4px 10px;
+  font-size: 14px;
+  border-radius: 6px;
+  border: none;
+  background: #ccc;
+  color: #666;
+  cursor: not-allowed; /* na razie nieaktywny */
+}
+
+/* Checkbox */
+.photo-controls input[type="checkbox"] {
+  transform: scale(1.3);
+  cursor: pointer;
+}
+
+/* Pływający przycisk Pobierz */
+#downloadSelectedBtn {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background: #222;
+  color: #fff;
+  padding: 14px 22px;
+  border-radius: 50px;
+  font-size: 18px;
+  cursor: pointer;
+  display: none; /* widoczny tylko gdy coś zaznaczono */
+  z-index: 999;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+  transition: transform 0.15s ease;
+}
+
+#downloadSelectedBtn:active {
+  transform: scale(1.05);
+}
