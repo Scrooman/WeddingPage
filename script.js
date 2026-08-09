@@ -16,36 +16,74 @@ const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let galleryInstance = null;
 
+// ELEMENTY UI
+const fileInput = document.getElementById("fileInput");
+const fileInputLabel = document.getElementById("fileInputLabel");
+const uploadBtn = document.getElementById("uploadBtn");
+const selectedCount = document.getElementById("selectedCount");
+
+// ----------------------
+// OBSŁUGA WYBORU PLIKÓW
+// ----------------------
+fileInput.addEventListener("change", () => {
+  if (fileInput.files.length > 0) {
+    uploadBtn.style.display = "inline-block";
+  } else {
+    uploadBtn.style.display = "none";
+  }
+});
+
+fileInput.addEventListener("change", () => {
+  const count = fileInput.files.length;
+
+  if (count > 0) {
+    uploadBtn.style.display = "inline-block";
+    selectedCount.textContent = `Wybrano ${count} zdjęć`;
+  } else {
+    uploadBtn.style.display = "none";
+    selectedCount.textContent = "";
+  }
+});
+
 // ----------------------
 // UPLOAD ZDJĘĆ
 // ----------------------
-document.getElementById("uploadBtn").addEventListener("click", async () => {
-  const files = document.getElementById("fileInput").files;
+uploadBtn.addEventListener("click", async () => {
+  const files = fileInput.files;
 
-  console.log("Wybrane pliki:", files);
+  if (!files.length) return;
 
-  if (!files.length) return alert("Wybierz zdjęcia!");
+  // UI: blokada + loader
+  uploadBtn.classList.add("loading");
+  fileInputLabel.classList.add("disabled");
 
   for (const file of files) {
     const safeName = sanitizeFileName(file.name);
     const fileName = `${Date.now()}-${safeName}`;
 
-    console.log("Wysyłam plik:", fileName);
-
-    const { data, error } = await client.storage
-      .from("Photos") // Upewnij się, że to dokładna nazwa bucketu
+    const { error } = await client.storage
+      .from("Photos")
       .upload(fileName, file);
-    console.log("Upload response:", data, error);
 
     if (error) {
       console.error("Błąd uploadu:", error);
       alert("Błąd podczas wysyłania zdjęcia.");
-      return;
+      break;
     }
-
-    console.log("Plik wysłany OK:", fileName);
   }
 
+  // UI: odblokowanie
+  uploadBtn.classList.remove("loading");
+  fileInputLabel.classList.remove("disabled");
+
+  // Reset inputu
+    fileInput.value = "";
+    uploadBtn.style.display = "none";
+    fileInput.value = "";
+    uploadBtn.style.display = "none";
+    selectedCount.textContent = "";
+
+  // Odśwież galerię
   loadGallery();
 });
 
@@ -53,38 +91,28 @@ document.getElementById("uploadBtn").addEventListener("click", async () => {
 // ŁADOWANIE GALERII
 // ----------------------
 async function loadGallery() {
-  console.log("Ładuję galerię…");
-
   const gallery = document.getElementById("gallery");
 
-  // LISTUJEMY ROOT BUCKETU
   const { data: files, error } = await client.storage
     .from("Photos")
     .list("", { limit: 200 });
-
-  console.log("Root list():", files);
-  console.log("Błąd list():", error);
 
   if (error) {
     console.error("Błąd pobierania listy plików:", error);
     return;
   }
 
+  // Sortowanie po created_at DESC
+  const sorted = files
+    .filter(f => f.metadata?.size > 0) // pomijamy placeholder
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
   gallery.innerHTML = "";
 
-  // USUWAMY FILTR — wszystkie elementy to pliki
-  const imageFiles = files;
-
-  console.log("Pliki do wyświetlenia:", imageFiles);
-
-  for (const file of imageFiles) {
-    const fullPath = file.name;
-
+  for (const file of sorted) {
     const { data: urlData } = client.storage
       .from("Photos")
-      .getPublicUrl(fullPath);
-
-    console.log("Public URL:", urlData.publicUrl);
+      .getPublicUrl(file.name);
 
     const link = document.createElement("a");
     link.href = urlData.publicUrl;
@@ -98,8 +126,6 @@ async function loadGallery() {
     gallery.appendChild(link);
   }
 
-  console.log("Elementy galerii:", gallery.children.length);
-
   if (galleryInstance) {
     galleryInstance.destroy(true);
   }
@@ -109,10 +135,6 @@ async function loadGallery() {
     plugins: [lgZoom, lgThumbnail],
     speed: 300
   });
-
-  console.log("LightGallery zainicjalizowane.");
 }
-
-
 
 loadGallery();

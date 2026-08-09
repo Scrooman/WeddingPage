@@ -20,10 +20,13 @@
     <p>Dodaj swoje zdjęcia i obejrzyj te od innych gości.</p>
   </header>
 
-  <section class="upload-section">
-    <input type="file" id="fileInput" accept="image/*" multiple />
+<section class="upload-section">
+    <label id="fileInputLabel" for="fileInput">Wybierz zdjęcia</label>
+    <p id="selectedCount" style="margin-top:10px; font-size:16px;"></p>
+    <input type="file" id="fileInput" accept="image/*" multiple style="display:none;" />
     <button id="uploadBtn">Wyślij zdjęcia</button>
-  </section>
+</section>
+
 
   <section>
     <h2>Wasze zdjęcia</h2>

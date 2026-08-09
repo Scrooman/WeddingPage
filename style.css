@@ -21,24 +21,6 @@ h1 {
   margin: 20px 0;
 }
 
-#uploadBtn {
-  margin-top: 10px;
-  padding: 10px 20px;
-  font-size: 16px;
-  border: none;
-  background: #222;
-  color: #fff;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-/* GALERIA */
-.gallery {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-  padding: 20px;
-}
 
 .gallery img {
   width: 100%;
@@ -48,14 +30,59 @@ h1 {
   object-fit: cover;
 }
 
-/* TABLET */
+/* Wyróżniony przycisk wyboru pliku */
+#fileInputLabel {
+  display: inline-block;
+  padding: 12px 20px;
+  background: #444;
+  color: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 16px;
+  margin-bottom: 10px;
+}
+
+#fileInputLabel.disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* Przycisk wysyłania */
+#uploadBtn {
+  padding: 10px 20px;
+  font-size: 16px;
+  border: none;
+  background: #222;
+  color: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+  display: none; /* ukryty dopóki nie ma plików */
+}
+
+#uploadBtn.loading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* Loader w przycisku */
+#uploadBtn.loading::after {
+  content: " ⏳";
+}
+
+/* Galeria */
+.gallery {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  padding: 20px;
+}
+
 @media (max-width: 900px) {
   .gallery {
     grid-template-columns: repeat(2, 1fr);
   }
 }
 
-/* TELEFON */
 @media (max-width: 600px) {
   .gallery {
     grid-template-columns: repeat(1, 1fr);
