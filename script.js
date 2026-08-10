@@ -5,18 +5,14 @@ const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 // KONFIGURACJA BACKENDU
 const BACKEND_URL = "https://tears-layout-exit-roughly.trycloudflare.com";
 
-
-
-// FUNKCJA SANITYZUJĄCA NAZWY PLIKÓW
 function sanitizeFileName(name) {
-  return nam
+  return name
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-zA-Z0-9._-]/g, "_");
 }
 
 console.log("Supabase URL:", SUPABASE_URL);
-
 console.log("Backend URL:", BACKEND_URL);
 
 const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -34,14 +30,6 @@ const downloadSelectedBtn = document.getElementById("downloadSelectedBtn");
 // OBSŁUGA WYBORU PLIKÓW
 // ----------------------
 fileInput.addEventListener("change", () => {
-  if (fileInput.files.length > 0) {
-    uploadBtn.style.display = "inline-block";
-  } else {
-    uploadBtn.style.display = "none";
-  }
-});
-
-fileInput.addEventListener("change", () => {
   const count = fileInput.files.length;
 
   if (count > 0) {
@@ -53,15 +41,13 @@ fileInput.addEventListener("change", () => {
   }
 });
 
-// Logika pływającego przycisku pobierania
-
-
+// ----------------------
+// POBIERANIE ZAZNACZONYCH
+// ----------------------
 function updateDownloadButton() {
   const checked = document.querySelectorAll('.photo-controls input[type="checkbox"]:checked');
   downloadSelectedBtn.style.display = checked.length > 0 ? "block" : "none";
 }
-
-// Logika Pobierania wybranych zdjęć
 
 downloadSelectedBtn.addEventListener("click", async () => {
   const checked = document.querySelectorAll('.photo-controls input[type="checkbox"]:checked');
@@ -69,45 +55,32 @@ downloadSelectedBtn.addEventListener("click", async () => {
   for (const cb of checked) {
     const url = cb.dataset.url;
 
-    // Pobieramy plik jako blob
     const response = await fetch(url);
     const blob = await response.blob();
 
-    // Tworzymy lokalny URL do pobrania
     const blobUrl = URL.createObjectURL(blob);
 
-    // Tworzymy element <a> z atrybutem download
     const a = document.createElement("a");
     a.href = blobUrl;
-    a.download = url.split("/").pop(); // nazwa pliku
+    a.download = url.split("/").pop();
     document.body.appendChild(a);
-
-    // Wywołujemy pobranie
     a.click();
-
-    // Sprzątanie
     a.remove();
+
     URL.revokeObjectURL(blobUrl);
   }
 
-  // Reset checkboxów
   checked.forEach(cb => cb.checked = false);
-
-  // Ukrycie przycisku
   downloadSelectedBtn.style.display = "none";
 });
-
-
 
 // ----------------------
 // UPLOAD ZDJĘĆ
 // ----------------------
 uploadBtn.addEventListener("click", async () => {
   const files = fileInput.files;
-
   if (!files.length) return;
 
-  // UI: blokada + loader
   uploadBtn.classList.add("loading");
   fileInputLabel.classList.add("disabled");
 
@@ -126,29 +99,22 @@ uploadBtn.addEventListener("click", async () => {
     }
   }
 
-  // UI: odblokowanie
   uploadBtn.classList.remove("loading");
   fileInputLabel.classList.remove("disabled");
 
-  // Reset inputu
-    fileInput.value = "";
-    uploadBtn.style.display = "none";
-    fileInput.value = "";
-    uploadBtn.style.display = "none";
-    selectedCount.textContent = "";
+  fileInput.value = "";
+  uploadBtn.style.display = "none";
+  selectedCount.textContent = "";
 
-    document.querySelectorAll('.photo-controls input[type="checkbox"]').forEach(cb => cb.checked = false);
-    downloadSelectedBtn.style.display = "none";
+  document.querySelectorAll('.photo-controls input[type="checkbox"]').forEach(cb => cb.checked = false);
+  downloadSelectedBtn.style.display = "none";
 
-  // Odśwież galerię
   loadGallery();
 });
 
-
-//  ----------------------
+// ----------------------
 // LOGIKA DRUKOWANIA
 // ----------------------
-
 async function checkPrinterAvailability() {
   try {
     const res = await fetch(`${BACKEND_URL}/status`);
@@ -175,44 +141,38 @@ async function loadGallery() {
     return;
   }
 
-  // Sortowanie po created_at DESC
   const sorted = files
-    .filter(f => f.metadata?.size > 0) // pomijamy placeholder
+    .filter(f => f.metadata?.size > 0)
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
   gallery.innerHTML = "";
 
-for (const file of sorted) {
-  const { data: urlData } = client.storage
-    .from("Photos")
-    .getPublicUrl(file.name);
+  for (const file of sorted) {
+    const { data: urlData } = client.storage
+      .from("Photos")
+      .getPublicUrl(file.name);
 
-  const frame = document.createElement("div");
-  frame.className = "photo-frame";
+    const frame = document.createElement("div");
+    frame.className = "photo-frame";
 
-  const controls = document.createElement("div");
-  controls.className = "photo-controls";
+    const controls = document.createElement("div");
+    controls.className = "photo-controls";
 
-  const controls1a = document.createElement("div");
-  controls1a.className = "photo-controls-1a";
+    const controls1a = document.createElement("div");
+    controls1a.className = "photo-controls-1a";
 
-  const checkbox = document.createElement("input");
-  checkbox.type = "checkbox";
-  checkbox.dataset.url = urlData.publicUrl;
-
-  checkbox.addEventListener("change", updateDownloadButton);
-
-
-    
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.dataset.url = urlData.publicUrl;
+    checkbox.addEventListener("change", updateDownloadButton);
 
     const printBtn = document.createElement("button");
     printBtn.textContent = "Drukuj";
-    printBtn.disabled = true; // domyślnie wyłączony    
+    printBtn.disabled = true;
 
-  controls1a.appendChild(checkbox);
-  controls.appendChild(controls1a);
+    controls1a.appendChild(checkbox);
+    controls.appendChild(controls1a);
 
-    // dodaj etykietę dla checkboxa
     const label = document.createElement("label");
     label.className = "photo-controls-1a .label";
     label.textContent = "Zaznacz, aby pobrać";
@@ -220,54 +180,51 @@ for (const file of sorted) {
     controls.appendChild(printBtn);
 
     checkPrinterAvailability().then((available) => {
-        if (available) {
-            printBtn.disabled = false;
-            printBtn.style.cursor = "pointer";
-            printBtn.style.background = "#222";
-            printBtn.style.color = "#fff";
-        } else {
-            printBtn.disabled = true;
-            printBtn.style.cursor = "not-allowed";
-            printBtn.style.background = "#ccc";
-            printBtn.style.color = "#666";
-        }
+      if (available) {
+        printBtn.disabled = false;
+        printBtn.style.cursor = "pointer";
+        printBtn.style.background = "#222";
+        printBtn.style.color = "#fff";
+      } else {
+        printBtn.disabled = true;
+        printBtn.style.cursor = "not-allowed";
+        printBtn.style.background = "#ccc";
+        printBtn.style.color = "#666";
+      }
     });
 
     printBtn.addEventListener("click", async () => {
-    const available = await checkPrinterAvailability();
+      const available = await checkPrinterAvailability();
 
-    if (!available) {
+      if (!available) {
         console.warn("Drukowanie niedostępne — backend offline");
         return;
-    }
+      }
 
-    // Dodaj rekord do print_queue
-    await client.from("print_queue").insert({
-        image_url: urlData.publicUrl,
-        status: "pending"
+      await fetch(`${BACKEND_URL}/print`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image_url: urlData.publicUrl })
+      });
+
+      console.log("Zadanie drukowania wysłane");
     });
 
-    console.log("Zadanie drukowania wysłane");
-    });
+    const link = document.createElement("a");
+    link.href = urlData.publicUrl;
+    link.className = "gallery-item";
 
+    const img = document.createElement("img");
+    img.src = urlData.publicUrl;
+    img.loading = "lazy";
 
+    link.appendChild(img);
 
-  const link = document.createElement("a");
-  link.href = urlData.publicUrl;
-  link.className = "gallery-item";
+    frame.appendChild(controls);
+    frame.appendChild(link);
 
-  const img = document.createElement("img");
-  img.src = urlData.publicUrl;
-  img.loading = "lazy";
-
-  link.appendChild(img);
-
-  frame.appendChild(controls);
-  frame.appendChild(link);
-
-  gallery.appendChild(frame);
-}
-
+    gallery.appendChild(frame);
+  }
 
   if (galleryInstance) {
     galleryInstance.destroy(true);
@@ -279,8 +236,5 @@ for (const file of sorted) {
     speed: 300
   });
 }
-
-
-
 
 loadGallery();
