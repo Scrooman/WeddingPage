@@ -3,7 +3,62 @@ const SUPABASE_URL = "https://vuhnrmnwkjlxcrysmvkx.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ1aG5ybW53a2pseGNyeXNtdmt4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYxOTg1OTgsImV4cCI6MjEwMTc3NDU5OH0.ZDO7tNWNRVimRzXsn-_lZvkr0y7aUy88KlR57rgAkts";
 
 // KONFIGURACJA BACKENDU
-const BACKEND_URL = "https://tears-layout-exit-roughly.trycloudflare.com";
+const BACKEND_URL = "http://127.0.0.1:3000";
+
+// === WALIDACJA EVENT TOKEN ===
+
+// Pobranie tokenu z URL
+const params = new URLSearchParams(window.location.search);
+const EVENT_TOKEN = params.get("event_token");
+console.log("Pobrano token z URL:", EVENT_TOKEN);
+
+// Walidacja formatu (64 znaki hex = 256 bitów)
+const validHex = /^[a-f0-9]{64}$/i;
+
+// Ukrycie strony do czasu walidacji
+//document.body.style.display = "none";
+
+async function validateEventToken() {
+    if (!EVENT_TOKEN || !validHex.test(EVENT_TOKEN)) {
+        showAccessDenied("Brak lub niepoprawny token w adresie URL");
+        return false;
+    }
+
+    // Zapytanie do Supabase
+    const { data, error } = await client
+        .from("event_tokens")
+        .select("*")
+        .eq("token", EVENT_TOKEN)
+        .single();
+        //zaloguj wysłanie żądania
+        console.log("Wysłano żądanie walidacji tokenu:", EVENT_TOKEN);
+
+    if (error || !data) {
+        showAccessDenied("Token nie istnieje w bazie");
+        return false;
+    }
+
+    if (data.active === false) {
+        showAccessDenied("Token jest nieaktywny");
+        return false;
+    }
+
+    // Token poprawny → pokazujemy stronę
+    document.body.style.display = "block";
+    return true;
+}
+
+function showAccessDenied(msg) {
+    document.body.innerHTML = `
+        <div style="padding:40px; text-align:center; font-family:Inter;">
+            <h2>Brak dostępu</h2>
+            <p>${msg}</p>
+        </div>
+    `;
+}
+
+
+
 
 function sanitizeFileName(name) {
   return name
@@ -194,21 +249,52 @@ async function loadGallery() {
     });
 
     printBtn.addEventListener("click", async () => {
-      const available = await checkPrinterAvailability();
+  const available = await checkPrinterAvailability();
 
-      if (!available) {
-        console.warn("Drukowanie niedostępne — backend offline");
-        return;
-      }
+  if (!available) {
+    alert("Backend drukarki jest offline");
+    return;
+  }
 
-      await fetch(`${BACKEND_URL}/print`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image_url: urlData.publicUrl })
-      });
+  // 🔥 LOADER W PRZYCISKU
+  const originalText = printBtn.textContent;
+  printBtn.textContent = "⏳";
+  printBtn.disabled = true;
 
-      console.log("Zadanie drukowania wysłane");
+  try {
+    const response = await fetch(`${BACKEND_URL}/print`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        image_url: urlData.publicUrl,
+        event_token: EVENT_TOKEN
+      })
     });
+
+    if (response.status === 429) {
+      alert("Za szybko! Poczekaj chwilę przed kolejnym drukowaniem.");
+    } else if (response.status === 409) {
+      // 🔥 DUPLIKAT W KOLEJCE
+      alert("To zdjęcie jest już w kolejce do druku");
+    } else if (response.status === 400) {
+      alert("Nieprawidłowy URL obrazu");
+    } else if (response.status === 422) {
+      alert("To zdjęcie jest już w trakcie drukowania");
+    } else if (!response.ok) {
+      alert("Nie udało się wysłać zadania drukowania");
+    } else {
+      alert("Zadanie drukowania wysłane");
+    }
+
+    } catch (err) {
+      alert("Błąd połączenia z backendem");
+    }
+
+    // 🔥 PRZYWRÓCENIE PRZYCISKU
+    printBtn.textContent = originalText;
+    printBtn.disabled = false;
+  });
+
 
     const link = document.createElement("a");
     link.href = urlData.publicUrl;
@@ -237,4 +323,10 @@ async function loadGallery() {
   });
 }
 
-loadGallery();
+// Uruchom walidację przed ładowaniem galerii
+validateEventToken().then(valid => {
+  console.log("Wynik walidacji tokenu:", valid);
+    if (valid) {
+        loadGallery(); // ← Twoja istniejąca funkcja
+    }
+});
