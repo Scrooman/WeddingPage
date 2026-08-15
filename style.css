@@ -21,18 +21,22 @@ button, input, textarea, select {
 
 body {
   font-family: 'Times New Roman', serif;
-  background-color: #F4F2EE;
-  background-image: url("background.png");
-  background-repeat: no-repeat;
-  background-position: center center;
-  background-size: cover;
-  background-attachment: fixed;
+  position: relative;
+  background: #F4F2EE;
   color: #222;
   overflow-y: auto;
 }
 
 body::before {
-  display: none;
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-color: #F4F2EE;
+  background-image: url("background.png");
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-attachment: fixed;
 }
 
 @media (max-width: 768px) {
