@@ -227,6 +227,13 @@ h1 {
   padding: 20px;
 }
 
+@media (max-width: 768px) {
+  body {
+    background-attachment: scroll;
+    background-size: cover;
+  }
+}
+
 @media (max-width: 900px) {
   .gallery {
     grid-template-columns: repeat(2, 1fr);
