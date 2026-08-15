@@ -12,6 +12,10 @@
   <!-- LightGallery CSS -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@2.7.1/css/lightgallery-bundle.min.css">
 
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap" rel="stylesheet">
+
   <!-- Supabase JS -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -19,23 +23,27 @@
 <body>
   <header>
     <h1>Galeria Weselna</h1>
-    <p>Dodaj swoje zdjęcia i obejrzyj te od innych gości.</p>
+    <p id="headerText">Przeglądaj zdjęcia z naszego ślubu. <br> <br> Wybierz i wyślij nam zdjęcia, którymi chcesz się podzielić</p>
+    
   </header>
 
 <section class="upload-section">
     <label id="fileInputLabel" for="fileInput">Wybierz zdjęcia</label>
     <p id="selectedCount" style="margin-top:10px; font-size:16px;"></p>
     <input type="file" id="fileInput" accept="image/*" multiple style="display:none;" />
-    <button id="uploadBtn">Wyślij zdjęcia</button>
+    <button id="uploadBtn"></button>
 </section>
 
+  <div class="ornament">
+    <span>✦</span>
+  </div>
 
-  <section>
-    <h2>Wasze zdjęcia</h2>
+  <section id="gallerySection">
+    <h2 id="galleryTitle" style="display: none;">Wasze zdjęcia</h2>
     <div id="gallery" class="gallery"></div>
   </section>
 
-  <button id="downloadSelectedBtn">Pobierz</button>
+  <button id="downloadSelectedBtn">Pobierz ⬇ </button>
 
 
   <!-- LightGallery JS -->

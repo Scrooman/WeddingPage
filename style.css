@@ -1,9 +1,48 @@
-body {
-  font-family: "Inter", sans-serif;
+:root {
+  --button-hover-color: #71796187;
+  --button-text-hover-color: #000000;
+  --button-active-color: #717961;
+  --button-active-text-color: #343824;
+  --button-disabled-color: #ccc;
+  --button-disabled-text-color: #666;
+  --button-color: #c6cfba;
+  --button-text-color: #000000;
+}
+
+
+html, body {
   margin: 0;
-  padding: 0;
-  background: #fafafa;
+  min-height: 100%;
+}
+
+button, input, textarea, select {
+  font: inherit;
+}
+
+body {
+  font-family: 'Times New Roman', serif;
+  position: relative;
+  background: #F4F2EE;
   color: #222;
+  overflow-y: auto;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-color: #F4F2EE;
+  background-image: url("background.png");
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-attachment: fixed;
+}
+
+@media (max-width: 768px) {
+  body::before {
+    background-size: 100% 100%;
+  }
 }
 
 header {
@@ -11,14 +50,53 @@ header {
   padding: 40px 20px;
 }
 
-h1 {
-  font-size: 32px;
-  margin-bottom: 10px;
+#headerText {
+  box-shadow: inset 1px 0px 20px 5px #6d705f85;
+  border-radius: 12px;
+  padding: 1rem;
+  color: #222;
+  font-weight: bolder;
+  min-width: 18rem;
+  max-width: 30rem;
+  justify-self: center;
 }
+
+h1 {
+  color: #6D705F;
+  font-size: 55px;
+  margin-bottom: 3rem;
+  font-family: 'Great Vibes', cursive;
+  text-shadow: 0px 10px 10px #6D705F;
+}
+
 
 .upload-section {
   text-align: center;
-  margin: 20px 0;
+
+}
+
+#galleryTitle {
+  justify-self: center;
+  color: #6D705F
+}
+
+.ornament {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin: 2rem auto;
+  color: #6d705f;
+}
+
+.ornament::before,
+.ornament::after {
+  content: "";
+  display: block;
+  width: 120px;
+  height: 1px;
+  background: #6d705f;
+  opacity: 0.7;
 }
 
 
@@ -33,31 +111,103 @@ h1 {
 /* Wyróżniony przycisk wyboru pliku */
 #fileInputLabel {
   display: inline-block;
-  padding: 12px 20px;
-  background: #444;
-  color: #fff;
+  margin-bottom: 2rem;
+
+  padding: 10px 20px;
+  background: var(--button-color);
+  color: var(--button-text-color);
   border-radius: 6px;
   cursor: pointer;
   font-size: 16px;
   margin-bottom: 10px;
+  font-weight: bold;
+  box-shadow: 0px 1px 3px 2px #6d705f;
+  cursor: pointer;
+  transition: all 0.3s ease;
 }
+
+#fileInputLabel:hover {
+  background-color: var(--button-hover-color);
+  color: var(--button-text-hover-color);
+  transform: translateY(-3px)
+}
+
+#fileInputLabel:active,
+#fileInputLabel.active {
+  background-color: var(--button-active-color);
+  color: var(--button-active-text-color);
+  transform: translateY(2px)
+}
+
+#fileInputLabel.active:hover {
+  background-color: var(--button-hover-color);
+  color: var(--button-text-hover-color);
+  transform: translateY(-3px)
+}
+
 
 #fileInputLabel.disabled {
   opacity: 0.4;
   pointer-events: none;
 }
 
+#selectedCount {
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+#selectedCount.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+#selectedCount.hidden {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
 /* Przycisk wysyłania */
 #uploadBtn {
+
+  margin-bottom: 2rem;
+  display: none;
+  border: 0px;
   padding: 10px 20px;
-  font-size: 16px;
-  border: none;
-  background: #222;
-  color: #fff;
+  background: var(--button-color);
+  color: var(--button-text-color);
   border-radius: 6px;
   cursor: pointer;
-  display: none; /* ukryty dopóki nie ma plików */
+  font-size: 16px;
+  margin-bottom: 10px;
+  font-weight: bold;
+  box-shadow: 0px 1px 3px 2px #6d705f;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  width: 9rem;
 }
+
+
+#uploadBtn:hover {
+  background-color: var(--button-hover-color);
+  color: var(--button-text-hover-color);
+  transform: translateY(-3px)
+}
+
+#uploadBtn:active,
+#uploadBtn.active {
+  background-color: var(--button-active-color);
+  color: var(--button-active-text-color);
+  transform: translateY(2px)
+}
+
+#uploadBtn.active:hover {
+  background-color: var(--button-hover-color);
+  color: var(--button-text-hover-color);
+  transform: translateY(-3px)
+}
+
+
 
 #uploadBtn.loading {
   opacity: 0.6;
@@ -66,7 +216,7 @@ h1 {
 
 /* Loader w przycisku */
 #uploadBtn.loading::after {
-  content: " ⏳";
+  content: "⏳";
 }
 
 /* Galeria */
@@ -94,7 +244,7 @@ h1 {
   border: 2px solid #ddd;
   border-radius: 10px;
   padding: 10px;
-  background: #fff;
+  background: #233e1157;;
   position: relative;
   transition: transform 0.15s ease;
 }
@@ -121,16 +271,39 @@ h1 {
     margin-left: 0.8rem;
     font-size: 0.8rem;
     font-style: italic;
+    color: black;
 }
 
 .photo-controls button {
   padding: 4px 10px;
   font-size: 14px;
   border-radius: 6px;
-  border: none;
-  background: #ccc;
-  color: #666;
+  background: var(--button-color);
+  color: var(--button-text-color);
+  box-shadow: 0px 1px 3px 2px #6d705f;
+  cursor: pointer;
+  transition: all 0.3s ease;
   cursor: not-allowed; /* na razie nieaktywny */
+  border: 0px;
+}
+
+.photo-controls button:disabled {
+  background-color: var(--button-disabled-color);
+  color: var(--button-disabled-text-color);
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.photo-controls button:hover {
+  background-color: var(--button-hover-color);
+  color: var(--button-text-hover-color);
+  transform: translateY(-3px)
+}
+
+.photo-controls button:active {
+  background-color: var(--button-active-color);
+  color: var(--button-active-text-color);
+  transform: translateY(2px)
 }
 
 /* Checkbox */
@@ -144,18 +317,29 @@ h1 {
   position: fixed;
   bottom: 20px;
   right: 20px;
-  background: #222;
-  color: #fff;
-  padding: 14px 22px;
+  padding: 18px 28px;
   border-radius: 50px;
-  font-size: 18px;
+  font-size: 20px;
   cursor: pointer;
   display: none; /* widoczny tylko gdy coś zaznaczono */
   z-index: 999;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.25);
-  transition: transform 0.15s ease;
+  background: #c6cfba;
+  color: var(--button-text-color);
+  cursor: pointer;
+  font-weight: bold;
+  box-shadow: 0px 1px 3px 2px #6d705f;
+  cursor: pointer;
+  transition: all 0.3s ease;
 }
 
 #downloadSelectedBtn:active {
   transform: scale(1.05);
+  background-color: var(--button-active-color);
+  color: var(--button-active-text-color);
+}
+
+#downloadSelectedBtn:hover {
+  background-color: #717961;
+  color: var(--button-text-hover-color);
+  transform: translateY(-3px)
 }
