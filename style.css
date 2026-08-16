@@ -42,6 +42,8 @@ body::before {
 @media (max-width: 768px) {
   body::before {
     background-size: 100% 100%;
+    background-attachment: scroll;
+    background-size: cover;
   }
 }
 
@@ -299,6 +301,7 @@ h1 {
   color: var(--button-disabled-text-color);
   cursor: not-allowed;
   pointer-events: none;
+  opacity: 0.5;
 }
 
 .photo-controls button:hover {

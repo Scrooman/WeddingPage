@@ -3,7 +3,7 @@ const SUPABASE_URL = "https://vuhnrmnwkjlxcrysmvkx.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ1aG5ybW53a2pseGNyeXNtdmt4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYxOTg1OTgsImV4cCI6MjEwMTc3NDU5OH0.ZDO7tNWNRVimRzXsn-_lZvkr0y7aUy88KlR57rgAkts";
 
 // KONFIGURACJA BACKENDU
-const BACKEND_URL = "https://republic-humanitarian-lover-cam.trycloudflare.com";
+const BACKEND_URL = "http://127.0.0.1:3000";
 
 // === WALIDACJA EVENT TOKEN ===
 
