@@ -1,6 +1,9 @@
 # plik app.js
 # app.js
 
+#folder print_jobs
+/print_jobs
+
 # plik environmental variables
 .env
 
@@ -10,5 +13,5 @@ package.json
 # node_modules
 node_modules
 
-# readme file
+# readme file 
 README.md

@@ -18,18 +18,19 @@
 
   <!-- Supabase JS -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 
 <body>
   <header>
     <h1>Galeria Weselna</h1>
-    <p id="headerText">Przeglądaj zdjęcia z naszego ślubu. <br> <br> Wybierz i wyślij nam zdjęcia, którymi chcesz się podzielić</p>
+    <p id="headerText">Przeglądaj zdjęcia z naszego ślubu. <br> <br> Wybierz i wyślij nam zdjęcia, którymi chcesz się podzielić.</p>
     
   </header>
 
 <section class="upload-section">
     <label id="fileInputLabel" for="fileInput">Wybierz zdjęcia</label>
-    <p id="selectedCount" style="margin-top:10px; font-size:16px;"></p>
+    <p id="selectedCount"></p>
     <input type="file" id="fileInput" accept="image/*" multiple style="display:none;" />
     <button id="uploadBtn"></button>
 </section>

@@ -14,6 +14,8 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const PRINTER_NAME = process.env.PRINTER_NAME;
 
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : [];
+
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 const app = express();
@@ -29,7 +31,13 @@ if (!fs.existsSync(PRINT_DIR)) {
 let isPrinting = false;
 
 app.use(cors({
-  origin: "https:/slub-andzi-i-kuby.pl",
+  origin: function(origin, callback) {
+    if (!origin || ALLOWED_ORIGINS.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   methods: ["GET", "POST"],
   allowedHeaders: ["Content-Type"]
 }));

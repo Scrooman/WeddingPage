@@ -49,7 +49,7 @@ body::before {
 
 header {
   text-align: center;
-  padding: 40px 20px;
+  padding: 0rem 1.5rem;
 }
 
 #headerText {
@@ -66,9 +66,8 @@ header {
 h1 {
   color: #6D705F;
   font-size: 55px;
-  margin-bottom: 3rem;
   font-family: 'Great Vibes', cursive;
-  text-shadow: 0px 10px 10px #6D705F;
+  text-shadow: 0px 10px 10px #aeb0a4;
 }
 
 
@@ -87,7 +86,7 @@ h1 {
   align-items: center;
   justify-content: center;
   gap: 1rem;
-  margin: 2rem auto;
+  margin-top: 2rem;
   color: #6d705f;
 }
 
@@ -113,19 +112,19 @@ h1 {
 /* Wyróżniony przycisk wyboru pliku */
 #fileInputLabel {
   display: inline-block;
-  margin-bottom: 2rem;
-
+  margin-bottom: 1rem;
+  margin-top: 1rem;
   padding: 10px 20px;
   background: var(--button-color);
   color: var(--button-text-color);
   border-radius: 6px;
   cursor: pointer;
   font-size: 16px;
-  margin-bottom: 10px;
   font-weight: bold;
   box-shadow: 0px 1px 3px 2px #6d705f;
   cursor: pointer;
   transition: all 0.3s ease;
+  width: 7.5rem;
 }
 
 #fileInputLabel:hover {
@@ -157,6 +156,9 @@ h1 {
   opacity: 0;
   transform: translateY(6px);
   transition: opacity 0.3s ease, transform 0.3s ease;
+  margin-top: 0rem;
+  font-size: 16px;
+  margin-bottom: 2rem;
 }
 
 #selectedCount.show {
@@ -186,7 +188,7 @@ h1 {
   box-shadow: 0px 1px 3px 2px #6d705f;
   cursor: pointer;
   transition: all 0.3s ease;
-  width: 9rem;
+  width: 10rem;
 }
 
 
@@ -256,6 +258,9 @@ h1 {
   background: #233e1157;;
   position: relative;
   transition: transform 0.15s ease;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 }
 
 .photo-frame:active {
@@ -267,7 +272,7 @@ h1 {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  margin-top: 0.5rem;
 }
 
 .photo-controls-1a {

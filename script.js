@@ -90,7 +90,7 @@ fileInput.addEventListener("change", async () => {
   fileInputLabel.classList.add("disabled");
 
   // odczekanie 1 sekundy przed pokazaniem przycisku upload
-  await new Promise(resolve => setTimeout(resolve, 1000));
+  // await new Promise(resolve => setTimeout(resolve, 1000));
 
   if (count > 0) {
     // Walidacja: max 5 zdjęć
@@ -103,9 +103,16 @@ fileInput.addEventListener("change", async () => {
 
     fileInputLabel.classList.remove("disabled");
     uploadBtn.style.display = "inline-block";
-    uploadBtn.textContent = `Wyślij ➤`;
+    uploadBtn.textContent = `Dodaj do galerii`;
 
-    selectedCount.textContent = `Wybrano ${count} zdjęć`;
+    if (count === 1) {
+      const fileName = sanitizeFileName(fileInput.files[0].name);
+      selectedCount.textContent = `Wybrano 1 zdjęcie`;
+    } else if (count === 2) {
+      selectedCount.textContent = `Wybrano 2 zdjęcia`;
+    } else if (count > 2) {
+      selectedCount.textContent = `Wybrano ${count} zdjęć`;
+    }
     selectedCount.classList.remove("hidden");
     selectedCount.classList.add("show");
 
@@ -125,8 +132,8 @@ function updateDownloadButton() {
   const checked = document.querySelectorAll('.photo-controls input[type="checkbox"]:checked');
   
   // Limit do 10 zdjęć
-  if (checked.length > 10) {
-    alert("Maksymalnie 10 zdjęć naraz do pobrania!");
+  if (checked.length > 5) {
+    alert("Maksymalnie 5 zdjęć naraz do pobrania!");
     checked[checked.length - 1].checked = false;
     return;
   }
@@ -147,24 +154,58 @@ function getDownloadFileName(url) {
 
 downloadSelectedBtn.addEventListener("click", async () => {
   const checked = document.querySelectorAll('.photo-controls input[type="checkbox"]:checked');
+  
+  if (checked.length === 0) return;
 
-  for (const cb of checked) {
+  // Single file → direct download
+  if (checked.length === 1) {
+    const cb = checked[0];
     const url = cb.dataset.url;
     const fileName = getDownloadFileName(url);
-
+    
     const response = await fetch(url);
     const blob = await response.blob();
-
     const blobUrl = URL.createObjectURL(blob);
-
+    
     const a = document.createElement("a");
     a.href = blobUrl;
     a.download = fileName;
     document.body.appendChild(a);
     a.click();
     a.remove();
-
+    
     URL.revokeObjectURL(blobUrl);
+  } else {
+    // Multiple files → ZIP bundle
+    downloadSelectedBtn.textContent = "⏳ Pakowanie...";
+    downloadSelectedBtn.disabled = true;
+    
+    const zip = new JSZip();
+    
+    for (const cb of checked) {
+      const url = cb.dataset.url;
+      const fileName = getDownloadFileName(url);
+      
+      const response = await fetch(url);
+      const blob = await response.blob();
+      
+      zip.file(fileName, blob);
+    }
+    
+    const zipBlob = await zip.generateAsync({type: "blob"});
+    const zipUrl = URL.createObjectURL(zipBlob);
+    
+    const a = document.createElement("a");
+    a.href = zipUrl;
+    a.download = "zdjecia.zip";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    
+    URL.revokeObjectURL(zipUrl);
+    
+    downloadSelectedBtn.textContent = "Pobierz zaznaczone";
+    downloadSelectedBtn.disabled = false;
   }
 
   checked.forEach(cb => cb.checked = false);
@@ -374,8 +415,9 @@ async function loadGallery(reset = false) {
     img.dataset.original = file.originalUrl || file.signedUrl;
 
     link.appendChild(img);
-    frame.appendChild(controls);
+    
     frame.appendChild(link);
+    frame.appendChild(controls);
     gallery.appendChild(frame);
 
     checkPrinterAvailability().then((available) => {

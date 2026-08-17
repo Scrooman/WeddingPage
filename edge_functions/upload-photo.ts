@@ -13,12 +13,24 @@ const THUMBNAIL_SIZE = 300;
 const JPEG_QUALITY_ORIGINAL = 85;
 const JPEG_QUALITY_THUMBNAIL = 75;
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "http://127.0.0.1:5500",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Credentials": "true",
-};
+const ALLOWED_ORIGINS = [
+  "https://slub-andzi-i-kuby.pl",
+  "https://scrooman.github.io",
+  "http://127.0.0.1:5500",
+  "http://localhost:5500",
+];
+
+function getCorsHeaders(req: Request) {
+  const origin = req.headers.get("origin") || "";
+  const isAllowed = ALLOWED_ORIGINS.includes(origin);
+
+  return {
+    "Access-Control-Allow-Origin": isAllowed ? origin : ALLOWED_ORIGINS[0],
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Credentials": "true",
+  };
+}
 
 function isValidTokenFormat(token: string) {
   return /^[a-f0-9]{64}$/i.test(token);
@@ -108,7 +120,7 @@ serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
       status: 204,
-      headers: corsHeaders,
+      headers: getCorsHeaders(req),
     });
   }
 
@@ -122,7 +134,7 @@ serve(async (req) => {
         {
           status: 400,
           headers: {
-            ...corsHeaders,
+            ...getCorsHeaders(req),
             "Content-Type": "application/json",
           },
         }
@@ -145,7 +157,7 @@ serve(async (req) => {
         {
           status: 400,
           headers: {
-            ...corsHeaders,
+            ...getCorsHeaders(req),
             "Content-Type": "application/json",
           },
         }
@@ -162,7 +174,7 @@ serve(async (req) => {
         {
           status: 400,
           headers: {
-            ...corsHeaders,
+            ...getCorsHeaders(req),
             "Content-Type": "application/json",
           },
         }
@@ -268,7 +280,7 @@ serve(async (req) => {
       {
         status: 200,
         headers: {
-          ...corsHeaders,
+          ...getCorsHeaders(req),
           "Content-Type": "application/json",
         },
       }
@@ -292,7 +304,7 @@ serve(async (req) => {
       {
         status: statusMap[message] ?? 500,
         headers: {
-          ...corsHeaders,
+          ...getCorsHeaders(req),
           "Content-Type": "application/json",
         },
       }

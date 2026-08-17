@@ -9,12 +9,24 @@ const supabase = createClient(
 // In-memory cache for signed URLs
 const urlCache = new Map<string, { url: string; expiresAt: number }>();
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "http://127.0.0.1:5500",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Credentials": "true",
-};
+const ALLOWED_ORIGINS = [
+  "https://slub-andzi-i-kuby.pl",
+  "https://scrooman.github.io",
+  "http://127.0.0.1:5500",
+  "http://localhost:5500",
+];
+
+function getCorsHeaders(req: Request) {
+  const origin = req.headers.get("origin") || "";
+  const isAllowed = ALLOWED_ORIGINS.includes(origin);
+
+  return {
+    "Access-Control-Allow-Origin": isAllowed ? origin : ALLOWED_ORIGINS[0],
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Credentials": "true",
+  };
+}
 
 function isValidTokenFormat(token: string) {
   return /^[a-f0-9]{64}$/i.test(token);
@@ -82,6 +94,8 @@ async function getCachedSignedUrl(
 }
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+
   if (req.method === "OPTIONS") {
     return new Response(null, {
       status: 204,
@@ -95,6 +109,7 @@ serve(async (req) => {
     const expiresIn = Number(body.expiresIn ?? 3600);
     const limit = Number(body.limit ?? 5);
     const offset = Number(body.offset ?? 0);
+    const fetchLimit = limit + 1;
 
     if (!eventToken) {
       return new Response(
@@ -112,20 +127,19 @@ serve(async (req) => {
     await validateEventToken(eventToken);
 
     const { data: files, error: listError } = await supabase.storage
-      .from("Photos")
-      .list("", { 
-        limit, 
-        offset,
-        sortBy: { column: "created_at", order: "desc" }
-      });
+        .from("Photos")
+        .list("", { 
+          limit: fetchLimit, 
+          offset,
+          sortBy: { column: "created_at", order: "desc" }
+        });
 
-    if (listError) {
-      throw new Error(listError.message);
-    }
+      if (listError) throw new Error(listError.message);
 
-    // Wykluczenie podfolderów (np. "thumbnails") oraz pustych obiektów
-    const validFiles = (files ?? [])
-      .filter((file) => file.metadata?.size > 0 && !file.name.includes("/") && file.name !== "thumbnails");
+      // Przefiltruj folder "thumbnails" oraz obiekty katalogowe
+      const validFiles = (files ?? [])
+        .filter((file) => file.metadata?.size > 0 && !file.name.includes("/") && file.name !== "thumbnails")
+        .slice(0, limit); // Przytnij dokładnie do prośby klienta (10)
 
     const rows = await Promise.all(
       validFiles.map(async (file) => {
@@ -150,12 +164,13 @@ serve(async (req) => {
     );
 
     return new Response(
-      JSON.stringify({ 
-        files: rows,
-        hasMore: validFiles.length === limit,
-        offset,
-        limit
-      }),
+        JSON.stringify({ 
+          files: rows,
+          // hasMore sprawdzamy na podstawie tego czy w bucie było więcej obiektów niż nasz limit
+          hasMore: (files ?? []).length > limit,
+          offset,
+          limit
+        }),
       {
         status: 200,
         headers: {
