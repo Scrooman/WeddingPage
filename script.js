@@ -224,7 +224,7 @@ async function loadGallery() {
   const { data, error } = await client.functions.invoke("gallery", {
     body: {
       event_token: EVENT_TOKEN,
-      expiresIn: 300, // 5 minut
+      expiresIn: 3600, // 1 godzina
       limit: 200
     }
   });
