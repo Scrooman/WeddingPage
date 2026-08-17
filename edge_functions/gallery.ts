@@ -6,6 +6,9 @@ const supabase = createClient(
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
 );
 
+// In-memory cache for signed URLs
+const urlCache = new Map<string, { url: string; expiresAt: number }>();
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "http://127.0.0.1:5500",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -47,6 +50,37 @@ async function validateEventToken(eventToken: string) {
   return data;
 }
 
+// Get or create signed URL with caching
+async function getCachedSignedUrl(
+  bucket: string,
+  filePath: string,
+  expiresIn: number
+): Promise<string | null> {
+  const cacheKey = `${bucket}:${filePath}`;
+  const now = Date.now();
+  
+  // Check cache
+  const cached = urlCache.get(cacheKey);
+  if (cached && cached.expiresAt > now) {
+    return cached.url;
+  }
+  
+  // Generate new signed URL
+  const { data, error } = await supabase.storage
+    .from(bucket)
+    .createSignedUrl(filePath, expiresIn);
+  
+  if (error || !data?.signedUrl) {
+    return null;
+  }
+  
+  // Cache with 60s buffer before expiry
+  const expiresAt = now + (expiresIn - 60) * 1000;
+  urlCache.set(cacheKey, { url: data.signedUrl, expiresAt });
+  
+  return data.signedUrl;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
@@ -59,7 +93,8 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const eventToken = String(body.event_token ?? "");
     const expiresIn = Number(body.expiresIn ?? 3600);
-    const limit = Number(body.limit ?? 200);
+    const limit = Number(body.limit ?? 5);
+    const offset = Number(body.offset ?? 0);
 
     if (!eventToken) {
       return new Response(
@@ -78,39 +113,55 @@ serve(async (req) => {
 
     const { data: files, error: listError } = await supabase.storage
       .from("Photos")
-      .list("", { limit, offset: 0 });
+      .list("", { 
+        limit, 
+        offset,
+        sortBy: { column: "created_at", order: "desc" }
+      });
 
     if (listError) {
       throw new Error(listError.message);
     }
 
-    const rows = await Promise.all(
-      (files ?? [])
-        .filter((file) => file.metadata?.size > 0)
-        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-        .map(async (file) => {
-          const { data: signedData, error: signedError } = await supabase.storage
-            .from("Photos")
-            .createSignedUrl(file.name, expiresIn);
+    // Wykluczenie podfolderów (np. "thumbnails") oraz pustych obiektów
+    const validFiles = (files ?? [])
+      .filter((file) => file.metadata?.size > 0 && !file.name.includes("/") && file.name !== "thumbnails");
 
-          return {
-            id: file.id,
-            name: file.name,
-            metadata: file.metadata,
-            created_at: file.created_at,
-            signedUrl: signedError ? null : signedData?.signedUrl ?? null,
-            signedUrlError: signedError ? signedError.message : null,
-          };
-        })
+    const rows = await Promise.all(
+      validFiles.map(async (file) => {
+        // Pobieganie Signed URL oryginalnego zdjęcia (cached)
+        const originalUrl = await getCachedSignedUrl("Photos", file.name, expiresIn);
+        
+        // Pobieranie Signed URL miniatury z rozszerzeniem .jpg (cached)
+        const baseNameWithoutExt = file.name.replace(/\.[^.]+$/, "");
+        const thumbnailPath = `thumbnails/${baseNameWithoutExt}-thumb.jpg`;
+        const thumbnailUrl = await getCachedSignedUrl("Photos", thumbnailPath, expiresIn);
+
+        return {
+          id: file.id,
+          name: file.name,
+          metadata: file.metadata,
+          created_at: file.created_at,
+          originalUrl,
+          thumbnailUrl: thumbnailUrl || originalUrl, // Fallback do oryginału w przypadku braku miniatury
+          signedUrl: originalUrl, // Zachowane dla wstecznej kompatybilności z frontendem
+        };
+      })
     );
 
     return new Response(
-      JSON.stringify({ files: rows }),
+      JSON.stringify({ 
+        files: rows,
+        hasMore: validFiles.length === limit,
+        offset,
+        limit
+      }),
       {
         status: 200,
         headers: {
           ...corsHeaders,
           "Content-Type": "application/json",
+          "Cache-Control": "public, max-age=3600, immutable",
         },
       }
     );

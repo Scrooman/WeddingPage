@@ -29,7 +29,7 @@ if (!fs.existsSync(PRINT_DIR)) {
 let isPrinting = false;
 
 app.use(cors({
-  origin: "http://127.0.0.1:5500",
+  origin: "https:/slub-andzi-i-kuby.pl",
   methods: ["GET", "POST"],
   allowedHeaders: ["Content-Type"]
 }));
@@ -154,18 +154,28 @@ async function processJob(job) {
     // 2. Pobranie pliku (NOWE: zapis do folderu)
     // --- NOWE POBIERANIE PLIKU Z SUPABASE STORAGE ---
     const filePath = job.image_url.replace(/^.*Photos\//, "");
+    
+    // Determine file extension (handle WebP)
+    const ext = filePath.match(/\.webp$/i) ? '.webp' : '.jpg';
+    const localFilePath = path.join(PRINT_DIR, `${job.id}${ext}`);
 
-    const { data: fileStream, error: downloadError } = await supabase.storage
-      .from("Photos")
-      .download(filePath);
+    // Check if file already exists locally (cache)
+    if (fs.existsSync(localFilePath)) {
+      console.log(`Using cached file: ${job.id}${ext}`);
+    } else {
+      // Download from Supabase Storage
+      const { data: fileStream, error: downloadError } = await supabase.storage
+        .from("Photos")
+        .download(filePath);
 
-    if (downloadError) {
-      console.error("Błąd pobierania pliku:", downloadError);
-      throw downloadError;
+      if (downloadError) {
+        console.error("Błąd pobierania pliku:", downloadError);
+        throw downloadError;
+      }
+
+      fs.writeFileSync(localFilePath, Buffer.from(await fileStream.arrayBuffer()));
+      console.log(`Downloaded file: ${job.id}${ext}`);
     }
-
-    const localFilePath = path.join(PRINT_DIR, `${job.id}.jpg`);
-    fs.writeFileSync(localFilePath, Buffer.from(await fileStream.arrayBuffer()));
     // --- KONIEC NOWEGO KODU ---
 
 

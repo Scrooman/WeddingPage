@@ -3,7 +3,7 @@ const SUPABASE_URL = "https://vuhnrmnwkjlxcrysmvkx.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ1aG5ybW53a2pseGNyeXNtdmt4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYxOTg1OTgsImV4cCI6MjEwMTc3NDU5OH0.ZDO7tNWNRVimRzXsn-_lZvkr0y7aUy88KlR57rgAkts";
 
 // KONFIGURACJA BACKENDU
-const BACKEND_URL = "http://127.0.0.1:3000";
+const BACKEND_URL = "https://mozilla-colin-christine-peter.trycloudflare.com";
 
 // === WALIDACJA EVENT TOKEN ===
 
@@ -14,9 +14,6 @@ console.log("Pobrano token z URL:", EVENT_TOKEN);
 
 // Walidacja formatu (64 znaki hex = 256 bitów)
 const validHex = /^[a-f0-9]{64}$/i;
-
-// Ukrycie strony do czasu walidacji
-//document.body.style.display = "none";
 
 async function validateEventToken() {
     if (!EVENT_TOKEN || !validHex.test(EVENT_TOKEN)) {
@@ -30,8 +27,8 @@ async function validateEventToken() {
         .select("*")
         .eq("token", EVENT_TOKEN)
         .single();
-        //zaloguj wysłanie żądania
-        console.log("Wysłano żądanie walidacji tokenu:", EVENT_TOKEN);
+    
+    console.log("Wysłano żądanie walidacji tokenu:", EVENT_TOKEN);
 
     if (error || !data) {
         showAccessDenied("Token nie istnieje w bazie");
@@ -57,9 +54,6 @@ function showAccessDenied(msg) {
     `;
 }
 
-
-
-
 function sanitizeFileName(name) {
   return name
     .normalize("NFD")
@@ -73,6 +67,7 @@ console.log("Backend URL:", BACKEND_URL);
 const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let galleryInstance = null;
+let galleryObserver = null;
 
 // ELEMENTY UI
 const fileInput = document.getElementById("fileInput");
@@ -80,6 +75,11 @@ const fileInputLabel = document.getElementById("fileInputLabel");
 const uploadBtn = document.getElementById("uploadBtn");
 const selectedCount = document.getElementById("selectedCount");
 const downloadSelectedBtn = document.getElementById("downloadSelectedBtn");
+
+// Pagination state
+let currentOffset = 0;
+let isLoadingMore = false;
+let hasMorePhotos = true;
 
 // ----------------------
 // OBSŁUGA WYBORU PLIKÓW
@@ -92,9 +92,15 @@ fileInput.addEventListener("change", async () => {
   // odczekanie 1 sekundy przed pokazaniem przycisku upload
   await new Promise(resolve => setTimeout(resolve, 1000));
 
-  
-
   if (count > 0) {
+    // Walidacja: max 5 zdjęć
+    if (count > 5) {
+      alert("Maksymalnie 5 zdjęć na raz!");
+      fileInput.value = "";
+      fileInputLabel.classList.remove("disabled");
+      return;
+    }
+
     fileInputLabel.classList.remove("disabled");
     uploadBtn.style.display = "inline-block";
     uploadBtn.textContent = `Wyślij ➤`;
@@ -117,6 +123,14 @@ fileInput.addEventListener("change", async () => {
 // ----------------------
 function updateDownloadButton() {
   const checked = document.querySelectorAll('.photo-controls input[type="checkbox"]:checked');
+  
+  // Limit do 10 zdjęć
+  if (checked.length > 10) {
+    alert("Maksymalnie 10 zdjęć naraz do pobrania!");
+    checked[checked.length - 1].checked = false;
+    return;
+  }
+  
   downloadSelectedBtn.style.display = checked.length > 0 ? "block" : "none";
 }
 
@@ -164,19 +178,23 @@ uploadBtn.addEventListener("click", async () => {
   const files = fileInput.files;
   if (!files.length) return;
 
+  if (files.length > 5) {
+    alert("Maksymalnie 5 zdjęć na raz!");
+    return;
+  }
+
   uploadBtn.classList.add("loading");
   uploadBtn.textContent = "";
   fileInputLabel.classList.add("disabled");
 
-  // odczekanie 1 sekundy przed rozpoczęciem uploadu
-  // await new Promise(resolve => setTimeout(resolve, 1000));
-
   try {
-    for (const file of files) {
-    const safeName = sanitizeFileName(file.name);
     const formData = new FormData();
     formData.append("event_token", EVENT_TOKEN);
-    formData.append("file", file, safeName);
+    
+    for (let i = 0; i < files.length; i++) {
+      const safeName = sanitizeFileName(files[i].name);
+      formData.append("file", files[i], safeName);
+    }
 
     const { data, error } = await client.functions.invoke("upload-photo", {
       body: formData
@@ -185,9 +203,20 @@ uploadBtn.addEventListener("click", async () => {
     if (error) {
       console.error("Upload error:", error);
       alert(`Błąd uploadu: ${error.message || "unknown"}`);
-      break;
+    } else {
+      let message = data.message || `Wysłano ${data.uploaded?.length || 0} zdjęć`;
+      
+      if (data.duplicates && data.duplicates.length > 0) {
+        message += `\n\nPominięto duplikaty: ${data.duplicates.length}`;
+      }
+      
+      if (data.rejected && data.rejected.length > 0) {
+        message += `\n\nOdrzucono: ${data.rejected.length}`;
+        console.log("Rejected files:", data.rejected);
+      }
+      
+      alert(message);
     }
-  }
   } finally {
     uploadBtn.classList.remove("loading");
     fileInputLabel.classList.remove("disabled");
@@ -197,7 +226,9 @@ uploadBtn.addEventListener("click", async () => {
     selectedCount.textContent = "";
     document.querySelectorAll('.photo-controls input[type="checkbox"]').forEach(cb => cb.checked = false);
     downloadSelectedBtn.style.display = "none";
-    await loadGallery();
+    
+    // Reset pagination i załaduj od początku
+    await loadGallery(true);
   }
 });
 
@@ -216,28 +247,92 @@ async function checkPrinterAvailability() {
 }
 
 // ----------------------
+// LAZY LOADING (SENTINEL)
+// ----------------------
+function setupIntersectionObserver() {
+  const gallery = document.getElementById("gallery");
+  
+  let sentinel = document.getElementById("scroll-sentinel");
+  if (sentinel) sentinel.remove();
+
+  if (!hasMorePhotos) return;
+
+  sentinel = document.createElement("div");
+  sentinel.id = "scroll-sentinel";
+  sentinel.style.cssText = "height: 20px; width: 100%; margin-top: 10px;";
+  gallery.appendChild(sentinel);
+
+  if (galleryObserver) {
+    galleryObserver.disconnect();
+  }
+
+  galleryObserver = new IntersectionObserver((entries) => {
+    if (entries[0].isIntersecting && !isLoadingMore && hasMorePhotos) {
+      loadGallery(false);
+    }
+  }, {
+    rootMargin: "10px",
+    threshold: 0.1
+  });
+
+  galleryObserver.observe(sentinel);
+}
+
+// ----------------------
 // ŁADOWANIE GALERII
 // ----------------------
-async function loadGallery() {
+async function loadGallery(reset = false) {
   const gallery = document.getElementById("gallery");
+
+  if (reset) {
+    gallery.innerHTML = "";
+    currentOffset = 0;
+    hasMorePhotos = true;
+    if (galleryObserver) galleryObserver.disconnect();
+  }
+
+  if (isLoadingMore || !hasMorePhotos) return;
+
+  isLoadingMore = true;
+
+  // Usuń istniejący sentinel na czas ładowania
+  const oldSentinel = document.getElementById("scroll-sentinel");
+  if (oldSentinel) oldSentinel.remove();
+
+  // Pokaż loader
+  const loader = document.createElement("div");
+  loader.id = "gallery-loader";
+  loader.style.cssText = "text-align:center; padding:20px; font-size:24px; width: 100%;";
+  loader.textContent = "⏳ Ładowanie...";
+  gallery.appendChild(loader);
 
   const { data, error } = await client.functions.invoke("gallery", {
     body: {
       event_token: EVENT_TOKEN,
-      expiresIn: 3600, // 1 godzina
-      limit: 200
+      expiresIn: 3600, // 
+      limit: 5,
+      offset: currentOffset
     }
   });
 
+  // Usuń loader
+  const loaderEl = document.getElementById("gallery-loader");
+  if (loaderEl) loaderEl.remove();
+
   if (error) {
     console.error("Gallery error:", error);
-    gallery.innerHTML = "<p>Błąd pobierania galerii</p>";
+    if (reset) {
+      gallery.innerHTML = "<p>Błąd pobierania galerii</p>";
+    }
+    isLoadingMore = false;
     return;
   }
 
   const files = data?.files || [];
-
-  gallery.innerHTML = "";
+  console.log('Images:', files);
+  
+  hasMorePhotos = data?.hasMore || false;
+  currentOffset += files.length;
 
   for (const file of files) {
     if (!file.signedUrl) continue;
@@ -270,12 +365,13 @@ async function loadGallery() {
     controls.appendChild(printBtn);
 
     const link = document.createElement("a");
-    link.href = file.signedUrl;
+    link.href = file.originalUrl || file.signedUrl;
     link.className = "gallery-item";
+    link.dataset.src = file.originalUrl || file.signedUrl;
 
     const img = document.createElement("img");
-    img.src = file.signedUrl;
-    img.loading = "lazy";
+    img.src = file.thumbnailUrl || file.signedUrl;
+    img.dataset.original = file.originalUrl || file.signedUrl;
 
     link.appendChild(img);
     frame.appendChild(controls);
@@ -290,6 +386,10 @@ async function loadGallery() {
     });
 
     printBtn.addEventListener("click", async () => {
+      if (!confirm("Czy na pewno chcesz wydrukować to zdjęcie?")) {
+        return;
+      }
+
       const available = await checkPrinterAvailability();
       if (!available) {
         alert("Backend drukarki jest offline");
@@ -325,7 +425,6 @@ async function loadGallery() {
           alert("Zadanie drukowania wysłane");
         }
 
-        // usuń clasę active z przycisku po zakończeniu
         printBtn.classList.remove("active");
       } catch (err) {
         alert("Błąd połączenia z backendem");
@@ -336,21 +435,30 @@ async function loadGallery() {
     });
   }
 
-  if (galleryInstance) {
-    galleryInstance.destroy(true);
+  isLoadingMore = false;
+
+  // Reinicjalizacja LightGallery
+  if (reset) {
+    if (galleryInstance) {
+      galleryInstance.destroy(true);
+    }
+    galleryInstance = lightGallery(gallery, {
+      selector: ".gallery-item",
+      plugins: [lgZoom, lgThumbnail],
+      speed: 300
+    });
+  } else if (galleryInstance) {
+    galleryInstance.refresh();
   }
 
-  galleryInstance = lightGallery(gallery, {
-    selector: ".gallery-item",
-    plugins: [lgZoom, lgThumbnail],
-    speed: 300
-  });
+  // Konfiguracja obserwatora doładowywania kolejnych stron
+  setupIntersectionObserver();
 }
 
-// Uruchom walidację przed ładowaniem galerii
+// Uruchomienie aplikacji po walidacji tokenu
 validateEventToken().then(valid => {
   console.log("Wynik walidacji tokenu:", valid);
-    if (valid) {
-        loadGallery(); // ← Twoja istniejąca funkcja
-    }
+  if (valid) {
+    loadGallery(true);
+  }
 });
