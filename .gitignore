@@ -2,7 +2,9 @@
 # app.js
 
 #folder print_jobs
-/print_jobs
+print_jobs
+# plik .gitignore
+.gitignore
 
 # plik environmental variables
 .env

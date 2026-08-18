@@ -193,10 +193,7 @@ async function processJob(job) {
     // 4. Drukowanie
     await printImage(localFilePath);
 
-    // 5. Status: queued (NOWE)
-    await supabase.from("print_queue").update({ status: "queued" }).eq("id", job.id);
-
-    // 6. Status: completed
+    // 5. Status: completed (po pozytywnej odpowiedzi z drukarki)
     await supabase.from("print_queue").update({ status: "completed" }).eq("id", job.id);
 
   } catch (err) {

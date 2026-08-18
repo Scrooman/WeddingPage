@@ -3,7 +3,7 @@ const SUPABASE_URL = "https://vuhnrmnwkjlxcrysmvkx.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ1aG5ybW53a2pseGNyeXNtdmt4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYxOTg1OTgsImV4cCI6MjEwMTc3NDU5OH0.ZDO7tNWNRVimRzXsn-_lZvkr0y7aUy88KlR57rgAkts";
 
 // KONFIGURACJA BACKENDU
-const BACKEND_URL = "https://plasma-demonstration-throws-they.trycloudflare.com";
+const BACKEND_URL = "https://origin-fridge-ingredients-somewhat.trycloudflare.com";
 
 // === WALIDACJA EVENT TOKEN ===
 
@@ -454,7 +454,7 @@ async function loadGallery(reset = false) {
         });
 
         if (response.status === 429) {
-          alert("Za szybko! Poczekaj chwilę przed kolejnym drukowaniem.");
+          alert("Drukowanie w trakcie. Odczekaj 3 minuty przed kolejnym drukowaniem.");
         } else if (response.status === 409) {
           alert("To zdjęcie jest już w kolejce do druku");
         } else if (response.status === 400) {
