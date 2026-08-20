@@ -1,6 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
-import { Image } from "https://deno.land/x/imagescript@1.2.15/mod.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -9,9 +8,7 @@ const supabase = createClient(
 
 // Constants
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-const THUMBNAIL_SIZE = 300;
-const JPEG_QUALITY_ORIGINAL = 85;
-const JPEG_QUALITY_THUMBNAIL = 75;
+const MAX_FILES = 5;
 
 const ALLOWED_ORIGINS = [
   "https://slub-andzi-i-kuby.pl",
@@ -34,6 +31,10 @@ function getCorsHeaders(req: Request) {
 
 function isValidTokenFormat(token: string) {
   return /^[a-f0-9]{64}$/i.test(token);
+}
+
+function isValidHashFormat(hash: string) {
+  return /^[a-f0-9]{64}$/i.test(hash);
 }
 
 async function validateEventToken(eventToken: string) {
@@ -64,40 +65,6 @@ async function validateEventToken(eventToken: string) {
   }
 }
 
-// Hash first 512KB of file for deduplication
-async function hashFile(file: File): Promise<string> {
-  const chunkSize = 512 * 1024; // 512KB
-  const buffer = await file.slice(0, chunkSize).arrayBuffer();
-  const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-// Generate JPEG thumbnail
-async function generateThumbnail(fileBuffer: ArrayBuffer): Promise<Uint8Array> {
-  const image = await Image.decode(new Uint8Array(fileBuffer));
-  
-  // Calculate aspect ratio resize
-  const aspectRatio = image.width / image.height;
-  let newWidth = THUMBNAIL_SIZE;
-  let newHeight = THUMBNAIL_SIZE;
-  
-  if (aspectRatio > 1) {
-    newHeight = Math.round(THUMBNAIL_SIZE / aspectRatio);
-  } else {
-    newWidth = Math.round(THUMBNAIL_SIZE * aspectRatio);
-  }
-  
-  const resized = image.resize(newWidth, newHeight);
-  return await resized.encodeJPEG(JPEG_QUALITY_THUMBNAIL);
-}
-
-// Convert to JPEG
-async function convertToJPEG(fileBuffer: ArrayBuffer, quality: number): Promise<Uint8Array> {
-  const image = await Image.decode(new Uint8Array(fileBuffer));
-  return await image.encodeJPEG(quality);
-}
-
 // Check if file hash exists in database
 async function checkDuplicate(hash: string): Promise<boolean> {
   const { data, error } = await supabase
@@ -115,6 +82,13 @@ function sanitizeFileName(name: string) {
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-zA-Z0-9._-]/g, "_");
 }
+
+// Encoding/resizing now happens client-side; sanity-check JPEG magic bytes since server no longer decodes/re-encodes
+async function isJpeg(file: File): Promise<boolean> {
+  const head = new Uint8Array(await file.slice(0, 3).arrayBuffer());
+  return head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff;
+}
+
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -143,15 +117,14 @@ serve(async (req) => {
 
     await validateEventToken(eventToken);
 
-    // Get all files from FormData
-    const files: File[] = [];
-    for (const [key, value] of formData.entries()) {
-      if (key === "file" && value instanceof File) {
-        files.push(value);
-      }
+    // Client sends indexed groups: file_N, thumbnail_N, hash_N, filename_N
+    const indices = new Set<number>();
+    for (const key of formData.keys()) {
+      const match = key.match(/^file_(\d+)$/);
+      if (match) indices.add(Number(match[1]));
     }
 
-    if (files.length === 0) {
+    if (indices.size === 0) {
       return new Response(
         JSON.stringify({ error: "missing_file" }),
         {
@@ -165,7 +138,7 @@ serve(async (req) => {
     }
 
     // Validate max 5 files
-    if (files.length > 5) {
+    if (indices.size > MAX_FILES) {
       return new Response(
         JSON.stringify({ 
           error: "too_many_files",
@@ -187,9 +160,18 @@ serve(async (req) => {
       duplicates: [] as string[]
     };
 
-    // Process files sequentially to avoid memory issues
-    for (const file of files) {
-      const safeName = sanitizeFileName(file.name);
+    // Process files sequentially
+    for (const index of [...indices].sort((a, b) => a - b)) {
+      const file = formData.get(`file_${index}`);
+      const thumbnail = formData.get(`thumbnail_${index}`);
+      const hash = String(formData.get(`hash_${index}`) ?? "");
+      const filenameRaw = String(formData.get(`filename_${index}`) ?? "");
+      const safeName = sanitizeFileName(filenameRaw || `photo_${index}`);
+
+      if (!(file instanceof File) || !(thumbnail instanceof File)) {
+        results.rejected.push({ filename: safeName, reason: "missing_file_part" });
+        continue;
+      }
 
       // Validate file size
       if (file.size === 0) {
@@ -202,9 +184,18 @@ serve(async (req) => {
         continue;
       }
 
+      if (!isValidHashFormat(hash)) {
+        results.rejected.push({ filename: safeName, reason: "invalid_hash_format" });
+        continue;
+      }
+
       try {
-        // Hash for deduplication
-        const hash = await hashFile(file);
+        if (!(await isJpeg(file)) || !(await isJpeg(thumbnail))) {
+          results.rejected.push({ filename: safeName, reason: "invalid_image_format" });
+          continue;
+        }
+
+        // Dedupe check
         const isDuplicate = await checkDuplicate(hash);
         
         if (isDuplicate) {
@@ -212,25 +203,15 @@ serve(async (req) => {
           continue;
         }
 
-        // Read file buffer once
-        const fileBuffer = await file.arrayBuffer();
-
-        // Convert to JPEG
-        const jpegOriginal = await convertToJPEG(fileBuffer, JPEG_QUALITY_ORIGINAL);
-        
-        // Generate thumbnail
-        const thumbnailJPEG = await generateThumbnail(fileBuffer);
-
         // Create unique names
         const timestamp = Date.now();
-        const baseNameWithoutExt = safeName.replace(/\.[^.]+$/, "");
-        const originalName = `${timestamp}-${baseNameWithoutExt}.jpg`;
-        const thumbnailName = `${timestamp}-${baseNameWithoutExt}-thumb.jpg`;
+        const originalName = `${timestamp}-${safeName}.jpg`;
+        const thumbnailName = `${timestamp}-${safeName}-thumb.jpg`;
 
-        // Upload original JPEG
+        // Upload original JPEG (already encoded client-side)
         const { error: originalError } = await supabase.storage
           .from("Photos")
-          .upload(originalName, jpegOriginal, {
+          .upload(originalName, file, {
             contentType: "image/jpeg",
             upsert: false,
             cacheControl: "3600",
@@ -241,10 +222,10 @@ serve(async (req) => {
           continue;
         }
 
-        // Upload thumbnail
+        // Upload thumbnail (already encoded client-side)
         const { error: thumbnailError } = await supabase.storage
           .from("Photos")
-          .upload(`thumbnails/${thumbnailName}`, thumbnailJPEG, {
+          .upload(`thumbnails/${thumbnailName}`, thumbnail, {
             contentType: "image/jpeg",
             upsert: false,
             cacheControl: "3600",
@@ -275,7 +256,7 @@ serve(async (req) => {
       JSON.stringify({ 
         ok: true, 
         ...results,
-        message: `Wysłano ${results.uploaded.length} z ${files.length} zdjęć`
+        message: `Wysłano ${results.uploaded.length} z ${indices.size} zdjęć`
       }),
       {
         status: 200,

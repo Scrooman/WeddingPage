@@ -3,7 +3,7 @@ const SUPABASE_URL = "https://vuhnrmnwkjlxcrysmvkx.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ1aG5ybW53a2pseGNyeXNtdmt4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYxOTg1OTgsImV4cCI6MjEwMTc3NDU5OH0.ZDO7tNWNRVimRzXsn-_lZvkr0y7aUy88KlR57rgAkts";
 
 // KONFIGURACJA BACKENDU
-const BACKEND_URL = "https://origin-fridge-ingredients-somewhat.trycloudflare.com";
+const BACKEND_URL = "http://localhost:3000";
 
 // === WALIDACJA EVENT TOKEN ===
 
@@ -213,6 +213,73 @@ downloadSelectedBtn.addEventListener("click", async () => {
 });
 
 // ----------------------
+// KOMPRESJA ZDJĘĆ (FRONT)
+// ----------------------
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const THUMBNAIL_SIZE = 300;
+const JPEG_QUALITY_ORIGINAL = 0.85;
+const JPEG_QUALITY_THUMBNAIL = 0.75;
+
+async function hashFileClient(file) {
+  const chunkSize = 512 * 1024; // 512KB, must match server-side dedupe format
+  const buffer = await file.slice(0, chunkSize).arrayBuffer();
+  const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
+  return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+function canvasToBlob(canvas, quality) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => blob ? resolve(blob) : reject(new Error("canvas_encode_failed")),
+      "image/jpeg",
+      quality
+    );
+  });
+}
+
+async function bitmapToJpeg(bitmap, quality, maxWidth, maxHeight) {
+  let width = bitmap.width;
+  let height = bitmap.height;
+
+  if (maxWidth && maxHeight) {
+    const scale = Math.min(maxWidth / width, maxHeight / height, 1);
+    width = Math.round(width * scale);
+    height = Math.round(height * scale);
+  }
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("canvas_context_unavailable");
+  ctx.drawImage(bitmap, 0, 0, width, height);
+
+  return canvasToBlob(canvas, quality);
+}
+
+// Dekoduje, kompresuje i generuje miniaturę w przeglądarce; rzuca błąd jeśli plik nie jest poprawnym obrazem
+async function processImageFile(file) {
+  if (file.size === 0) throw new Error("empty_file");
+  if (file.size > MAX_FILE_SIZE) throw new Error("file_too_large");
+
+  const hash = await hashFileClient(file);
+  const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+
+  try {
+    const originalBlob = await bitmapToJpeg(bitmap, JPEG_QUALITY_ORIGINAL);
+
+    const aspectRatio = bitmap.width / bitmap.height;
+    const thumbWidth = aspectRatio > 1 ? THUMBNAIL_SIZE : Math.round(THUMBNAIL_SIZE * aspectRatio);
+    const thumbHeight = aspectRatio > 1 ? Math.round(THUMBNAIL_SIZE / aspectRatio) : THUMBNAIL_SIZE;
+    const thumbnailBlob = await bitmapToJpeg(bitmap, JPEG_QUALITY_THUMBNAIL, thumbWidth, thumbHeight);
+
+    return { hash, originalBlob, thumbnailBlob };
+  } finally {
+    bitmap.close();
+  }
+}
+
+// ----------------------
 // UPLOAD ZDJĘĆ
 // ----------------------
 uploadBtn.addEventListener("click", async () => {
@@ -231,10 +298,31 @@ uploadBtn.addEventListener("click", async () => {
   try {
     const formData = new FormData();
     formData.append("event_token", EVENT_TOKEN);
-    
+
+    let index = 0;
     for (let i = 0; i < files.length; i++) {
       const safeName = sanitizeFileName(files[i].name);
-      formData.append("file", files[i], safeName);
+
+      let processed;
+      try {
+        processed = await processImageFile(files[i]);
+      } catch (err) {
+        console.error("Compression error:", safeName, err);
+        alert(`Nie udało się przetworzyć zdjęcia "${safeName}". Zdjęcie nie zostało dodane.`);
+        continue;
+      }
+
+      const baseNameWithoutExt = safeName.replace(/\.[^.]+$/, "");
+      formData.append(`file_${index}`, processed.originalBlob, `${baseNameWithoutExt}.jpg`);
+      formData.append(`thumbnail_${index}`, processed.thumbnailBlob, `${baseNameWithoutExt}-thumb.jpg`);
+      formData.append(`hash_${index}`, processed.hash);
+      formData.append(`filename_${index}`, baseNameWithoutExt);
+      index++;
+    }
+
+    if (index === 0) {
+      alert("Żadne zdjęcie nie zostało poprawnie przetworzone. Upload przerwany.");
+      return;
     }
 
     const { data, error } = await client.functions.invoke("upload-photo", {
@@ -257,6 +345,11 @@ uploadBtn.addEventListener("click", async () => {
       }
       
       alert(message);
+
+      const uploadedCount = data.uploaded?.length || 0;
+      if (uploadedCount > 0) {
+        await prependNewPhotos(uploadedCount);
+      }
     }
   } finally {
     uploadBtn.classList.remove("loading");
@@ -267,9 +360,6 @@ uploadBtn.addEventListener("click", async () => {
     selectedCount.textContent = "";
     document.querySelectorAll('.photo-controls input[type="checkbox"]').forEach(cb => cb.checked = false);
     downloadSelectedBtn.style.display = "none";
-    
-    // Reset pagination i załaduj od początku
-    await loadGallery(true);
   }
 });
 
@@ -317,6 +407,154 @@ function setupIntersectionObserver() {
   });
 
   galleryObserver.observe(sentinel);
+}
+
+// ----------------------
+// BUDOWANIE ELEMENTU GALERII
+// ----------------------
+function createPhotoFrame(file) {
+  const frame = document.createElement("div");
+  frame.className = "photo-frame";
+
+  const controls = document.createElement("div");
+  controls.className = "photo-controls";
+
+  const checkbox = document.createElement("input");
+  checkbox.type = "checkbox";
+  checkbox.dataset.url = file.signedUrl;
+  checkbox.addEventListener("change", updateDownloadButton);
+
+  const label = document.createElement("label");
+  label.className = "photo-controls-1a";
+  label.textContent = "Zaznacz, aby pobrać";
+
+  const printBtn = document.createElement("button");
+  printBtn.textContent = "Drukuj";
+  printBtn.disabled = true;
+
+  const controls1a = document.createElement("div");
+  controls1a.className = "photo-controls-1a";
+  controls1a.appendChild(checkbox);
+  controls1a.appendChild(label);
+
+  controls.appendChild(controls1a);
+  controls.appendChild(printBtn);
+
+  const link = document.createElement("a");
+  link.href = file.originalUrl || file.signedUrl;
+  link.className = "gallery-item";
+  link.dataset.src = file.originalUrl || file.signedUrl;
+
+  const img = document.createElement("img");
+  img.src = file.thumbnailUrl || file.signedUrl;
+  img.dataset.original = file.originalUrl || file.signedUrl;
+
+  link.appendChild(img);
+
+  frame.appendChild(link);
+  frame.appendChild(controls);
+
+  checkPrinterAvailability().then((available) => {
+    if (available) {
+      printBtn.disabled = false;
+      printBtn.style.cursor = "pointer";
+    }
+  });
+
+  printBtn.addEventListener("click", async () => {
+    if (!confirm("Czy na pewno chcesz wydrukować to zdjęcie?")) {
+      return;
+    }
+
+    const available = await checkPrinterAvailability();
+    if (!available) {
+      alert("Backend drukarki jest offline");
+      printBtn.disabled = true;
+      return;
+    }
+
+    const originalText = printBtn.textContent;
+    printBtn.textContent = "⏳";
+    printBtn.disabled = true;
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/print`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          image_url: file.signedUrl,
+          event_token: EVENT_TOKEN
+        })
+      });
+
+      if (response.status === 429) {
+        alert("Drukowanie w trakcie. Odczekaj 3 minuty przed kolejnym drukowaniem.");
+      } else if (response.status === 409) {
+        alert("To zdjęcie jest już w kolejce do druku");
+      } else if (response.status === 400) {
+        alert("Nieprawidłowy URL obrazu");
+      } else if (response.status === 422) {
+        alert("To zdjęcie jest już w trakcie drukowania");
+      } else if (!response.ok) {
+        alert("Nie udało się wysłać zadania drukowania");
+      } else {
+        alert("Zadanie drukowania wysłane");
+      }
+
+      printBtn.classList.remove("active");
+    } catch (err) {
+      alert("Błąd połączenia z backendem");
+    }
+
+    printBtn.textContent = originalText;
+    printBtn.disabled = false;
+  });
+
+  return frame;
+}
+
+// ----------------------
+// DODANIE NOWO WYSŁANYCH ZDJĘĆ NA GÓRĘ GALERII
+// ----------------------
+async function prependNewPhotos(count) {
+  const gallery = document.getElementById("gallery");
+
+  const { data, error } = await client.functions.invoke("gallery", {
+    body: {
+      event_token: EVENT_TOKEN,
+      expiresIn: 3600,
+      limit: count,
+      offset: 0
+    }
+  });
+
+  if (error) {
+    console.error("Gallery refresh error:", error);
+    return;
+  }
+
+  const files = data?.files || [];
+
+  // Wstawiaj od najstarszego z nowych, aby zachować kolejność najnowsze-na-górze
+  for (let i = files.length - 1; i >= 0; i--) {
+    const file = files[i];
+    if (!file.signedUrl) continue;
+    const frame = createPhotoFrame(file);
+    gallery.insertBefore(frame, gallery.firstChild);
+  }
+
+  // Przesunięcie offsetu o liczbę realnie doładowanych zdjęć (może być mniejsza niż uploadowanych)
+  currentOffset += files.length;
+
+  if (galleryInstance) {
+    galleryInstance.refresh();
+  } else {
+    galleryInstance = lightGallery(gallery, {
+      selector: ".gallery-item",
+      plugins: [lgZoom, lgThumbnail],
+      speed: 300
+    });
+  }
 }
 
 // ----------------------
@@ -377,104 +615,8 @@ async function loadGallery(reset = false) {
 
   for (const file of files) {
     if (!file.signedUrl) continue;
-
-    const frame = document.createElement("div");
-    frame.className = "photo-frame";
-
-    const controls = document.createElement("div");
-    controls.className = "photo-controls";
-
-    const checkbox = document.createElement("input");
-    checkbox.type = "checkbox";
-    checkbox.dataset.url = file.signedUrl;
-    checkbox.addEventListener("change", updateDownloadButton);
-
-    const label = document.createElement("label");
-    label.className = "photo-controls-1a";
-    label.textContent = "Zaznacz, aby pobrać";
-
-    const printBtn = document.createElement("button");
-    printBtn.textContent = "Drukuj";
-    printBtn.disabled = true;
-
-    const controls1a = document.createElement("div");
-    controls1a.className = "photo-controls-1a";
-    controls1a.appendChild(checkbox);
-    controls1a.appendChild(label);
-
-    controls.appendChild(controls1a);
-    controls.appendChild(printBtn);
-
-    const link = document.createElement("a");
-    link.href = file.originalUrl || file.signedUrl;
-    link.className = "gallery-item";
-    link.dataset.src = file.originalUrl || file.signedUrl;
-
-    const img = document.createElement("img");
-    img.src = file.thumbnailUrl || file.signedUrl;
-    img.dataset.original = file.originalUrl || file.signedUrl;
-
-    link.appendChild(img);
-    
-    frame.appendChild(link);
-    frame.appendChild(controls);
+    const frame = createPhotoFrame(file);
     gallery.appendChild(frame);
-
-    checkPrinterAvailability().then((available) => {
-      if (available) {
-        printBtn.disabled = false;
-        printBtn.style.cursor = "pointer";
-      }
-    });
-
-    printBtn.addEventListener("click", async () => {
-      if (!confirm("Czy na pewno chcesz wydrukować to zdjęcie?")) {
-        return;
-      }
-
-      const available = await checkPrinterAvailability();
-      if (!available) {
-        alert("Backend drukarki jest offline");
-        printBtn.disabled = true;
-        return;
-      }
-
-      const originalText = printBtn.textContent;
-      printBtn.textContent = "⏳";
-      printBtn.disabled = true;
-
-      try {
-        const response = await fetch(`${BACKEND_URL}/print`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            image_url: file.signedUrl,
-            event_token: EVENT_TOKEN
-          })
-        });
-
-        if (response.status === 429) {
-          alert("Drukowanie w trakcie. Odczekaj 3 minuty przed kolejnym drukowaniem.");
-        } else if (response.status === 409) {
-          alert("To zdjęcie jest już w kolejce do druku");
-        } else if (response.status === 400) {
-          alert("Nieprawidłowy URL obrazu");
-        } else if (response.status === 422) {
-          alert("To zdjęcie jest już w trakcie drukowania");
-        } else if (!response.ok) {
-          alert("Nie udało się wysłać zadania drukowania");
-        } else {
-          alert("Zadanie drukowania wysłane");
-        }
-
-        printBtn.classList.remove("active");
-      } catch (err) {
-        alert("Błąd połączenia z backendem");
-      }
-
-      printBtn.textContent = originalText;
-      printBtn.disabled = false;
-    });
   }
 
   isLoadingMore = false;

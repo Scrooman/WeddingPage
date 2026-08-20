@@ -265,6 +265,69 @@ finally {
   });
 }
 
+// === ROTACJA WERTYKALNYCH ZDJĘĆ (bez przycinania) ===
+async function rotateIfVertical(filePath) {
+  if (process.platform !== 'win32') return; // System.Drawing dostępne tylko na Windows
+
+  return new Promise((resolve, reject) => {
+    const escapedPath = filePath.replace(/'/g, "''");
+
+    const psScript = `
+$ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.Drawing
+
+$imagePath = '${escapedPath}'
+
+# Wczytanie do pamięci, aby nie blokować pliku podczas zapisu
+$bytes = [System.IO.File]::ReadAllBytes($imagePath)
+$ms = New-Object System.IO.MemoryStream(,$bytes)
+$img = [System.Drawing.Image]::FromStream($ms)
+
+if ($img.Height -gt $img.Width) {
+  $img.RotateFlip([System.Drawing.RotateFlipType]::Rotate90FlipNone)
+  $img.Save($imagePath, [System.Drawing.Imaging.ImageFormat]::Jpeg)
+}
+
+$img.Dispose()
+$ms.Dispose()
+`;
+
+    const encodedScript = Buffer
+      .from(psScript, 'utf16le')
+      .toString('base64');
+
+    const child = execFile(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-NonInteractive',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-EncodedCommand',
+        encodedScript
+      ],
+      {
+        windowsHide: true,
+        maxBuffer: 1024 * 1024
+      },
+      (error, stdout, stderr) => {
+        if (error) {
+          console.error('Błąd rotacji obrazu:', stderr || error.message);
+          reject(error);
+          return;
+        }
+
+        resolve(stdout);
+      }
+    );
+
+    child.on('error', error => {
+      console.error('Nie można uruchomić PowerShell:', error);
+      reject(error);
+    });
+  });
+}
+
 // === PRZETWARZANIE ZADAŃ ===
 async function processJob(job) {
   if (isPrinting) {
@@ -310,6 +373,11 @@ async function processJob(job) {
 
     // 3. Status: downloaded (NOWE)
     await supabase.from("print_queue").update({ status: "downloaded" }).eq("id", job.id);
+
+    // Obrót wertykalnych zdjęć na bok (bez przycinania); tylko JPEG - System.Drawing nie gwarantuje wsparcia WebP
+    if (ext === '.jpg') {
+      await rotateIfVertical(localFilePath);
+    }
 
     // 4. Drukowanie
     await printImage(localFilePath);
