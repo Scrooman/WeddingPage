@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import axios from 'axios';
@@ -123,24 +123,145 @@ app.post('/print', async (req, res) => {
 // === FUNKCJA DRUKOWANIA ===
 async function printImage(filePath) {
   return new Promise((resolve, reject) => {
-    let command = '';
-
     if (process.platform === 'win32') {
-      // Drukowanie z domyślnymi ustawieniami Windows (NOWE)
-      command = `rundll32.exe C:\\Windows\\System32\\shimgvw.dll,ImageView_PrintTo "${filePath}" "${PRINTER_NAME}"`;
-    } else {
-      command = `lpr -P "${PRINTER_NAME}" -o media=Postcard "${filePath}"`;
+      const escapedPath = filePath.replace(/'/g, "''");
+      const escapedPrinterName = PRINTER_NAME.replace(/'/g, "''");
+
+      const psScript = `
+$ErrorActionPreference = 'Stop'
+
+Add-Type -AssemblyName System.Drawing
+
+$imagePath = '${escapedPath}'
+$printerName = '${escapedPrinterName}'
+
+if (-not (Test-Path -LiteralPath $imagePath)) {
+  throw "Plik nie istnieje: $imagePath"
+}
+
+$img = [System.Drawing.Image]::FromFile($imagePath)
+$printDoc = New-Object System.Drawing.Printing.PrintDocument
+$printDoc.PrinterSettings.PrinterName = $printerName
+
+if (-not $printDoc.PrinterSettings.IsValid) {
+  throw "Nieprawidłowa lub niedostępna drukarka: $printerName"
+}
+
+$printDoc.DefaultPageSettings.Landscape = $true
+$printDoc.DefaultPageSettings.Color = $true
+
+# Papier 10 x 15 cm.
+# Jednostką jest 1/100 cala: 394 x 591.
+$printDoc.DefaultPageSettings.PaperSize = New-Object System.Drawing.Printing.PaperSize(
+  "Photo 10x15 cm",
+  394,
+  591
+)
+
+$printDoc.Add_PrintPage({
+  param($sender, $e)
+
+  # PageBounds obejmuje cały obszar strony.
+  # Drukarka może fizycznie mieć niewielkie marginesy.
+  $bounds = $e.PageBounds
+
+  $scaleX = $bounds.Width / $img.Width
+  $scaleY = $bounds.Height / $img.Height
+
+  # Max powoduje wypełnienie całego papieru.
+  # Nadmiar obrazu zostanie przycięty.
+  $scale = [Math]::Max($scaleX, $scaleY)
+
+  $drawWidth = [int]($img.Width * $scale)
+  $drawHeight = [int]($img.Height * $scale)
+
+  # Wyśrodkowanie i przycięcie obrazu.
+  $x = [int]($bounds.Left + (($bounds.Width - $drawWidth) / 2))
+  $y = [int]($bounds.Top + (($bounds.Height - $drawHeight) / 2))
+
+  $e.Graphics.DrawImage(
+    $img,
+    $x,
+    $y,
+    $drawWidth,
+    $drawHeight
+  )
+
+  $e.HasMorePages = $false
+})
+
+try {
+  $printDoc.Print()
+  Write-Output "Zadanie wysłane do drukarki: $printerName"
+}
+finally {
+  $img.Dispose()
+  $printDoc.Dispose()
+}
+`;
+
+      const encodedScript = Buffer
+        .from(psScript, 'utf16le')
+        .toString('base64');
+
+      const child = execFile(
+        'powershell.exe',
+        [
+          '-NoProfile',
+          '-NonInteractive',
+          '-ExecutionPolicy',
+          'Bypass',
+          '-EncodedCommand',
+          encodedScript
+        ],
+        {
+          windowsHide: true,
+          maxBuffer: 1024 * 1024
+        },
+        (error, stdout, stderr) => {
+          if (error) {
+            console.error('Błąd drukowania:', stderr || error.message);
+            reject(error);
+            return;
+          }
+
+          console.log(stdout.trim());
+          resolve(stdout);
+        }
+      );
+
+      child.on('error', error => {
+        console.error('Nie można uruchomić PowerShell:', error);
+        reject(error);
+      });
+
+      return;
     }
 
-    exec(command, (error, stdout, stderr) => {
-      if (error) {
-        console.error('Błąd drukowania:', error);
-        reject(error);
-      } else {
-        console.log('Wysłano do drukarki!');
-        resolve(stdout);
+    const child = execFile(
+      'lpr',
+      [
+        '-P',
+        PRINTER_NAME,
+        '-o',
+        'media=Postcard',
+        '-o',
+        'fit-to-page',
+        filePath
+      ],
+      error => {
+        if (error) {
+          console.error('Błąd drukowania:', error);
+          reject(error);
+          return;
+        }
+
+        console.log('Zadanie wysłane do drukarki.');
+        resolve();
       }
-    });
+    );
+
+    child.on('error', reject);
   });
 }
 
