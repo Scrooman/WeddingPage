@@ -17,7 +17,7 @@ const validHex = /^[a-f0-9]{64}$/i;
 
 async function validateEventToken() {
     if (!EVENT_TOKEN || !validHex.test(EVENT_TOKEN)) {
-        showAccessDenied("Brak lub niepoprawny token w adresie URL");
+        showAccessDenied("Nieprawidłowy link do galerii");
         return false;
     }
 
